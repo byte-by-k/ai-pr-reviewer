@@ -1,0 +1,257 @@
+# =============================================================================
+# AI PR Reviewer — Code Review Rules
+# =============================================================================
+# Rules are embedded into ChromaDB at startup. The AI agent semantically
+# retrieves the most relevant rules for each diff chunk before reviewing.
+#
+# Severity levels: critical | high | medium | low
+# Categories: security | performance | design | style | testing | resilience
+# =============================================================================
+
+rules:
+
+  # ---------------------------------------------------------------------------
+  # SECURITY
+  # ---------------------------------------------------------------------------
+
+  - id: SEC-001
+    name: No hardcoded credentials
+    category: security
+    severity: critical
+    description: >
+      Passwords, API keys, tokens, secrets, and connection strings must never
+      appear as string literals in source code. Use environment variables,
+      secrets managers (AWS Secrets Manager, Azure Key Vault), or config files
+      excluded from version control.
+    examples:
+      violation: |
+        String apiKey = "sk-abc123secret";
+        String password = "P@ssw0rd!";
+      compliant: |
+        String apiKey = System.getenv("API_KEY");
+        String password = config.getSecret("db.password");
+    tags: [credentials, secrets, api-key, password]
+
+  - id: SEC-002
+    name: Avoid SQL string concatenation
+    category: security
+    severity: critical
+    description: >
+      Never build SQL queries by concatenating user input directly into query
+      strings. This opens the door to SQL injection attacks. Always use
+      parameterised queries or prepared statements.
+    examples:
+      violation: |
+        String query = "SELECT * FROM users WHERE id = " + userId;
+      compliant: |
+        String query = "SELECT * FROM users WHERE id = ?";
+        PreparedStatement ps = conn.prepareStatement(query);
+        ps.setInt(1, userId);
+    tags: [sql-injection, security, database]
+
+  - id: SEC-003
+    name: Validate all external inputs
+    category: security
+    severity: high
+    description: >
+      All data originating from HTTP requests, message queues, files, or
+      external APIs must be validated and sanitised before use. Never trust
+      the caller.
+    tags: [input-validation, xss, injection]
+
+  # ---------------------------------------------------------------------------
+  # PERFORMANCE
+  # ---------------------------------------------------------------------------
+
+  - id: PERF-001
+    name: Avoid N+1 query patterns
+    category: performance
+    severity: high
+    description: >
+      Fetching child records inside a loop without batching causes N+1 database
+      queries. Use batch fetches, JOIN queries, or JPA entity graphs instead.
+    examples:
+      violation: |
+        for (User user : users) {
+            List<Order> orders = orderRepo.findByUserId(user.getId());
+        }
+      compliant: |
+        List<Order> orders = orderRepo.findByUserIdIn(userIds);
+    tags: [database, hibernate, jpa, loop, batch]
+
+  - id: PERF-002
+    name: Use connection pooling
+    category: performance
+    severity: high
+    description: >
+      Never create a new database or HTTP connection on each request. Use a
+      connection pool (HikariCP, Apache Commons DBCP) to reuse connections
+      and avoid the cost of connection setup per call.
+    tags: [database, connection-pool, http-client]
+
+  - id: PERF-003
+    name: Cache expensive computations and remote calls
+    category: performance
+    severity: medium
+    description: >
+      Results of expensive computations or remote API calls that are repeatedly
+      requested with the same input should be cached. Use Spring @Cacheable,
+      Redis, Hazelcast, or an in-process cache.
+    examples:
+      compliant: |
+        @Cacheable(value = "exchangeRates", key = "#currency")
+        public BigDecimal getRate(String currency) { ... }
+    tags: [caching, redis, hazelcast, performance]
+
+  - id: PERF-004
+    name: Avoid blocking calls in reactive or async contexts
+    category: performance
+    severity: high
+    description: >
+      Never call blocking I/O (JDBC, Thread.sleep, blocking HTTP) inside a
+      reactive pipeline (Mono/Flux), CompletableFuture chain, or virtual thread
+      without scheduling it on the appropriate blocking scheduler.
+    tags: [reactive, webflux, async, blocking]
+
+  # ---------------------------------------------------------------------------
+  # RESILIENCE
+  # ---------------------------------------------------------------------------
+
+  - id: RES-001
+    name: Handle exceptions explicitly — no empty catch blocks
+    category: resilience
+    severity: high
+    description: >
+      Empty catch blocks silently swallow failures, making issues impossible
+      to diagnose. Always log the exception at minimum, or re-throw as a
+      domain exception with context.
+    examples:
+      violation: |
+        try {
+            process(event);
+        } catch (Exception e) {
+            // TODO
+        }
+      compliant: |
+        try {
+            process(event);
+        } catch (Exception e) {
+            log.error("Failed to process event {}: {}", event.getId(), e.getMessage(), e);
+            throw new ProcessingException("Event processing failed", e);
+        }
+    tags: [exception-handling, logging, error]
+
+  - id: RES-002
+    name: Use retry with backoff for remote calls
+    category: resilience
+    severity: medium
+    description: >
+      Remote calls to databases, APIs, and message brokers can fail transiently.
+      Wrap them with retry logic using exponential backoff (Spring Retry,
+      Resilience4j) rather than failing immediately.
+    tags: [retry, resilience4j, spring-retry, fault-tolerance]
+
+  - id: RES-003
+    name: Apply circuit breaker on downstream dependencies
+    category: resilience
+    severity: medium
+    description: >
+      Without a circuit breaker, a failing downstream service will cause
+      cascading failures. Apply a circuit breaker (Resilience4j, Hystrix)
+      on all external HTTP and RPC calls.
+    tags: [circuit-breaker, resilience4j, microservices]
+
+  # ---------------------------------------------------------------------------
+  # DESIGN
+  # ---------------------------------------------------------------------------
+
+  - id: DES-001
+    name: Follow single responsibility principle
+    category: design
+    severity: medium
+    description: >
+      A class or method should have only one reason to change. Methods longer
+      than 40 lines or classes with more than 5 responsibilities are a signal
+      to decompose. Prefer small, focused, testable units.
+    tags: [srp, solid, clean-code, refactoring]
+
+  - id: DES-002
+    name: Avoid service-to-service direct calls — prefer events
+    category: design
+    severity: medium
+    description: >
+      In a microservices architecture, direct synchronous calls between services
+      create tight coupling and cascading failure risk. Prefer asynchronous
+      event-driven communication (Kafka, SQS) for non-critical paths.
+    tags: [microservices, coupling, kafka, event-driven]
+
+  - id: DES-003
+    name: Do not expose internal domain models via API contracts
+    category: design
+    severity: medium
+    description: >
+      Internal JPA entities or domain objects should never be used directly as
+      REST request/response bodies. Use dedicated DTOs to decouple the API
+      contract from the persistence model.
+    tags: [dto, api, rest, jpa, encapsulation]
+
+  # ---------------------------------------------------------------------------
+  # STYLE & MAINTAINABILITY
+  # ---------------------------------------------------------------------------
+
+  - id: STY-001
+    name: No System.out.println in production code
+    category: style
+    severity: low
+    description: >
+      Use a structured logger (SLF4J + Logback/Log4j2) for all logging.
+      System.out.println bypasses log level control, log aggregation, and
+      structured log formats required for observability.
+    examples:
+      violation: 'System.out.println("Processing order: " + orderId);'
+      compliant: 'log.info("Processing order: {}", orderId);'
+    tags: [logging, slf4j, observability]
+
+  - id: STY-002
+    name: Avoid magic numbers and strings
+    category: style
+    severity: low
+    description: >
+      Unexplained numeric or string literals embedded in logic are hard to
+      understand and maintain. Extract them as named constants or configuration
+      values.
+    examples:
+      violation: 'if (retryCount > 3) { Thread.sleep(5000); }'
+      compliant: |
+        private static final int MAX_RETRIES = 3;
+        private static final long RETRY_DELAY_MS = 5_000;
+    tags: [constants, readability, maintainability]
+
+  # ---------------------------------------------------------------------------
+  # TESTING
+  # ---------------------------------------------------------------------------
+
+  - id: TST-001
+    name: Every public method should have unit tests
+    category: testing
+    severity: medium
+    description: >
+      Public methods represent the contract of a class. Each should have at
+      least one happy-path and one failure-path unit test. Use JUnit 5 +
+      Mockito. Aim for >80% line coverage on service and utility classes.
+    tags: [unit-test, junit, coverage, tdd]
+
+  - id: TST-002
+    name: Do not use Thread.sleep in tests
+    category: testing
+    severity: medium
+    description: >
+      Thread.sleep in tests makes test suites slow and brittle. Use
+      Awaitility for async assertions, or mock the clock/timer dependencies.
+    examples:
+      violation: 'Thread.sleep(2000); // wait for async'
+      compliant: |
+        Awaitility.await()
+            .atMost(5, SECONDS)
+            .until(() -> resultStore.contains(expectedId));
+    tags: [testing, async, awaitility, flaky-tests]
