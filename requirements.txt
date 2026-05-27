@@ -1,0 +1,8 @@
+anthropic>=0.25.0
+chromadb>=0.4.22
+sentence-transformers>=2.5.0
+pyyaml>=6.0.0
+requests>=2.31.0
+click>=8.1.7
+python-dotenv>=1.0.0
+rich>=13.7.0
