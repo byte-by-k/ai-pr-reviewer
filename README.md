@@ -7,7 +7,7 @@
 [![Claude](https://img.shields.io/badge/Claude-Anthropic-orange?style=flat)](https://anthropic.com)
 [![ChromaDB](https://img.shields.io/badge/ChromaDB-Vector%20Store-green?style=flat)](https://trychroma.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
- 
+
 ---
 
 ## The Problem
@@ -20,22 +20,31 @@ Every team has code review standards — security practices, performance pattern
 
 ## How It Works
 
-```
-codereviewrules.yaml
-       │
-       ▼  (embed once / on rule change)
-   ChromaDB  ◄── sentence-transformers embeddings
-       │
-       │  semantic search: top-K rules per diff chunk
-       ▼
-  Claude (claude-sonnet-4-5)
-       │  input: diff chunk + relevant rules
-       │  output: structured JSON review comments
-       ▼
-  PRProvider (platform adapter)
-  ├── Azure DevOps  ✅
-  ├── GitHub        ✅
-  └── GitLab        (coming soon)
+```mermaid
+flowchart TD
+    subgraph setup ["⚙️ SETUP · run once"]
+        YAML["📄 codereviewrules.yaml\n15 rules"]
+        CLI["embed-rules CLI"]
+        DB[("ChromaDB\nvector store")]
+        YAML --> CLI --> DB
+    end
+
+    subgraph review ["🔍 REVIEW · per PR"]
+        PR["PR Opened\nGitHub / Azure DevOps"]
+        PROVIDER["PRProvider\nfetch diff"]
+        CHUNKS["Diff Chunks\nper hunk"]
+        SEARCH["Semantic Search\ntop-K rules"]
+        CLAUDE["☁️ Claude\nAnthropic API"]
+        VERDICT{Violations\nfound?}
+        COMMENTS["🟠 Post Inline Comments\nRequest Changes"]
+        APPROVE["✅ Approve PR"]
+
+        PR --> PROVIDER --> CHUNKS --> SEARCH --> CLAUDE --> VERDICT
+        VERDICT -->|yes| COMMENTS
+        VERDICT -->|no| APPROVE
+    end
+
+    DB -.->|vector match| SEARCH
 ```
 
 ### Why ChromaDB?
