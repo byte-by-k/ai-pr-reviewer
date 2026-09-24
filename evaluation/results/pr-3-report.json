@@ -1,0 +1,184 @@
+{
+  "pr_id": "3",
+  "title": "Demo: correctness and resilience review sample",
+  "overall_risk": "critical",
+  "verdict": "request_changes",
+  "executive_summary": "9 distinct finding(s) remained after combining 3 specialist reviews. Highest severity: critical.",
+  "findings": [
+    {
+      "agent": "correctness",
+      "category": "off-by-one error",
+      "severity": "critical",
+      "confidence": "high",
+      "title": "Off-by-one error in calculate_batch_totals causes IndexError",
+      "explanation": "The loop iterates from 0 to len(prices) inclusive using range(len(prices) + 1), but list indices are only valid from 0 to len(prices) - 1. On the final iteration, prices[index] will attempt to access an index beyond the list bounds, raising an IndexError.",
+      "file_path": "samples/order_processor.py",
+      "line": 8,
+      "evidence": "for index in range(len(prices) + 1):\n        running_total += prices[index]",
+      "recommendation": "Change range(len(prices) + 1) to range(len(prices)) to iterate only over valid indices, or use enumerate(prices) for cleaner iteration.",
+      "suggested_test": "Test with a non-empty list like [10.0, 20.0, 30.0] to verify the function completes without IndexError and returns correct running totals [10.0, 30.0, 60.0].",
+      "matched_rule_ids": [],
+      "contributing_agents": [
+        "correctness"
+      ]
+    },
+    {
+      "agent": "testing",
+      "category": "missing_tests",
+      "severity": "high",
+      "confidence": "high",
+      "title": "No tests for calculate_batch_totals with off-by-one indexing bug",
+      "explanation": "The function has a critical off-by-one error (range(len(prices) + 1) will cause IndexError) but no tests exist to catch it. Boundary tests with empty lists, single elements, and multiple elements would immediately reveal this bug.",
+      "file_path": "samples/order_processor.py",
+      "line": 4,
+      "evidence": "def calculate_batch_totals(prices: list[float]) -> list[float]:\n    \"\"\"Return running totals for a batch of prices.\"\"\"\n    totals: list[float] = []\n    running_total = 0.0\n    for index in range(len(prices) + 1):\n        running_total += prices[index]\n        totals.append(running_total)\n    return totals",
+      "recommendation": "Add unit tests: (1) empty list [], (2) single element [10.0], (3) multiple elements [10.0, 20.0, 30.0], (4) negative prices [-5.0, 10.0]. These boundary tests would catch the IndexError from the off-by-one bug.",
+      "suggested_test": "def test_calculate_batch_totals_empty():\n    assert calculate_batch_totals([]) == []\n\ndef test_calculate_batch_totals_single():\n    assert calculate_batch_totals([10.0]) == [10.0]\n\ndef test_calculate_batch_totals_multiple():\n    assert calculate_batch_totals([10.0, 20.0, 30.0]) == [10.0, 30.0, 60.0]",
+      "matched_rule_ids": [
+        "TST-001"
+      ],
+      "contributing_agents": [
+        "testing"
+      ]
+    },
+    {
+      "agent": "correctness",
+      "category": "performance defect",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Quadratic time complexity in find_duplicate_orders",
+      "explanation": "The function calls order_ids.count(order_id) for every element in order_ids. The count() method scans the entire list each time, resulting in O(n\u00b2) time complexity. For large order lists, this will cause severe performance degradation.",
+      "file_path": "samples/order_processor.py",
+      "line": 17,
+      "evidence": "for order_id in order_ids:\n        if order_ids.count(order_id) > 1 and order_id not in duplicates:",
+      "recommendation": "Use a set or Counter to track seen items in O(n) time: seen = set(); duplicates = []; for oid in order_ids: (duplicates.append(oid) if oid in seen else seen.add(oid)). Alternatively, use collections.Counter to count occurrences in a single pass.",
+      "suggested_test": "Test with a large list (e.g., 10,000 order IDs with duplicates) and measure execution time to verify linear performance improvement.",
+      "matched_rule_ids": [],
+      "contributing_agents": [
+        "correctness"
+      ]
+    },
+    {
+      "agent": "testing",
+      "category": "missing_tests",
+      "severity": "high",
+      "confidence": "high",
+      "title": "No failure-path tests for load_retry_count exception handling",
+      "explanation": "The overly broad except Exception silently returns 0 for all errors (missing key, invalid int, None value). No tests verify this behavior or document which errors are intentionally suppressed versus bugs.",
+      "file_path": "samples/order_processor.py",
+      "line": 23,
+      "evidence": "def load_retry_count(settings: dict[str, str]) -> int:\n    \"\"\"Read a retry count, silently replacing configuration errors.\"\"\"\n    try:\n        return int(settings[\"retry_count\"])\n    except Exception:\n        return 0",
+      "recommendation": "Add failure-path tests: (1) missing key {} expecting 0, (2) invalid integer {'retry_count': 'abc'} expecting 0, (3) None value {'retry_count': None}, (4) happy path {'retry_count': '5'} expecting 5. Document whether silent failure is intentional or should raise specific exceptions.",
+      "suggested_test": "def test_load_retry_count_missing_key():\n    assert load_retry_count({}) == 0\n\ndef test_load_retry_count_invalid_int():\n    assert load_retry_count({'retry_count': 'invalid'}) == 0\n\ndef test_load_retry_count_valid():\n    assert load_retry_count({'retry_count': '5'}) == 5",
+      "matched_rule_ids": [
+        "TST-001"
+      ],
+      "contributing_agents": [
+        "testing"
+      ]
+    },
+    {
+      "agent": "security",
+      "category": "exception_handling",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Overly broad exception handling masks security-relevant configuration errors",
+      "explanation": "The load_retry_count function catches all exceptions with a bare 'except Exception' clause and silently returns 0. This masks security-relevant failures such as missing configuration keys, type conversion errors, or tampered settings. An attacker who can influence the settings dictionary could cause the function to fail silently, potentially bypassing retry logic or other security controls that depend on correct configuration.",
+      "file_path": "samples/order_processor.py",
+      "line": 26,
+      "evidence": "except Exception:\n        return 0",
+      "recommendation": "Catch only specific expected exceptions (KeyError, ValueError) and log security-relevant failures. Consider raising an exception or using a secure default for missing or invalid configuration rather than silently returning 0. Example: except (KeyError, ValueError) as e: logger.warning(f'Invalid retry_count configuration: {e}'); raise",
+      "suggested_test": null,
+      "matched_rule_ids": [
+        "SEC-003"
+      ],
+      "contributing_agents": [
+        "security"
+      ]
+    },
+    {
+      "agent": "testing",
+      "category": "missing_tests",
+      "severity": "medium",
+      "confidence": "high",
+      "title": "No boundary tests for negative or zero prices in calculate_batch_totals",
+      "explanation": "Beyond the off-by-one bug, there are no tests verifying correct behavior with edge cases like negative prices, zero prices, or very large floating-point values that could expose precision issues.",
+      "file_path": "samples/order_processor.py",
+      "line": 4,
+      "evidence": "def calculate_batch_totals(prices: list[float]) -> list[float]:\n    \"\"\"Return running totals for a batch of prices.\"\"\"",
+      "recommendation": "Add boundary tests: (1) negative prices [-10.0, 5.0] expecting [-10.0, -5.0], (2) zero prices [0.0, 0.0], (3) mixed positive/negative/zero [10.0, -5.0, 0.0, 3.0], (4) very large values [1e10, 1e10] to check floating-point precision.",
+      "suggested_test": "def test_calculate_batch_totals_negative():\n    assert calculate_batch_totals([-10.0, 5.0]) == [-10.0, -5.0]\n\ndef test_calculate_batch_totals_zeros():\n    assert calculate_batch_totals([0.0, 0.0]) == [0.0, 0.0]",
+      "matched_rule_ids": [
+        "TST-001"
+      ],
+      "contributing_agents": [
+        "testing"
+      ]
+    },
+    {
+      "agent": "testing",
+      "category": "missing_tests",
+      "severity": "medium",
+      "confidence": "high",
+      "title": "No performance or scale tests for find_duplicate_orders",
+      "explanation": "The quadratic O(n\u00b2) implementation using repeated count() calls has no tests verifying behavior with large datasets. Performance regression tests are needed to catch scalability issues.",
+      "file_path": "samples/order_processor.py",
+      "line": 14,
+      "evidence": "def find_duplicate_orders(order_ids: list[str]) -> list[str]:\n    \"\"\"Find duplicate identifiers using repeated full-list scans.\"\"\"\n    duplicates: list[str] = []\n    for order_id in order_ids:\n        if order_ids.count(order_id) > 1 and order_id not in duplicates:\n            duplicates.append(order_id)\n    return duplicates",
+      "recommendation": "Add tests: (1) happy path with duplicates ['A', 'B', 'A', 'C', 'B'] expecting ['A', 'B'], (2) no duplicates ['A', 'B', 'C'], (3) empty list [], (4) all duplicates ['X', 'X', 'X'], (5) performance test with 10,000+ items to document baseline timing.",
+      "suggested_test": "def test_find_duplicate_orders_with_duplicates():\n    assert set(find_duplicate_orders(['A', 'B', 'A', 'C', 'B'])) == {'A', 'B'}\n\ndef test_find_duplicate_orders_no_duplicates():\n    assert find_duplicate_orders(['A', 'B', 'C']) == []\n\ndef test_find_duplicate_orders_empty():\n    assert find_duplicate_orders([]) == []",
+      "matched_rule_ids": [
+        "TST-001"
+      ],
+      "contributing_agents": [
+        "testing"
+      ]
+    },
+    {
+      "agent": "testing",
+      "category": "missing_tests",
+      "severity": "medium",
+      "confidence": "medium",
+      "title": "No security tests for load_retry_count with malicious input",
+      "explanation": "The function accepts arbitrary dict input with no validation. Tests should verify behavior with extremely large integers, special characters, or injection attempts to ensure safe failure modes.",
+      "file_path": "samples/order_processor.py",
+      "line": 23,
+      "evidence": "def load_retry_count(settings: dict[str, str]) -> int:\n    \"\"\"Read a retry count, silently replacing configuration errors.\"\"\"\n    try:\n        return int(settings[\"retry_count\"])\n    except Exception:\n        return 0",
+      "recommendation": "Add security/boundary tests: (1) extremely large string {'retry_count': '999999999999999999999'}, (2) negative values {'retry_count': '-1'}, (3) special characters {'retry_count': '5; DROP TABLE'}, (4) empty string {'retry_count': ''}. Verify safe defaults or appropriate exceptions.",
+      "suggested_test": "def test_load_retry_count_extremely_large():\n    result = load_retry_count({'retry_count': '999999999999999999999'})\n    assert result == 0  # or raises OverflowError\n\ndef test_load_retry_count_negative():\n    assert load_retry_count({'retry_count': '-1'}) == -1  # document if negative allowed",
+      "matched_rule_ids": [
+        "TST-001"
+      ],
+      "contributing_agents": [
+        "testing"
+      ]
+    },
+    {
+      "agent": "correctness",
+      "category": "exception handling",
+      "severity": "medium",
+      "confidence": "high",
+      "title": "Overly broad exception handling masks configuration errors",
+      "explanation": "The bare except Exception clause catches all exceptions including KeyError (missing key), ValueError (invalid format), and TypeError (wrong type). This silently returns 0 for any error, making it impossible to distinguish between missing configuration, malformed data, or other unexpected failures. Debugging and monitoring become difficult.",
+      "file_path": "samples/order_processor.py",
+      "line": 26,
+      "evidence": "try:\n        return int(settings[\"retry_count\"])\n    except Exception:\n        return 0",
+      "recommendation": "Catch only the specific exceptions you expect: except (KeyError, ValueError) as e. Log the error before returning the default value so operators can detect configuration problems. Consider raising an error for truly unexpected exceptions.",
+      "suggested_test": "Test with missing key, non-numeric value, and None value to verify appropriate handling. Test with an unexpected exception type to ensure it propagates rather than being silently caught.",
+      "matched_rule_ids": [],
+      "contributing_agents": [
+        "correctness"
+      ]
+    }
+  ],
+  "agent_summaries": {
+    "correctness": "Found 3 correctness issues: off-by-one array indexing causing IndexError, quadratic performance in duplicate detection, and overly broad exception handling masking configuration errors.",
+    "security": "Security review found one high-severity issue: overly broad exception handling in load_retry_count masks configuration errors and could hide security-relevant failures. No SQL injection, hardcoded credentials, or input validation violations were detected in this diff.",
+    "testing": "Three public functions lack any test coverage. Critical off-by-one error in calculate_batch_totals requires boundary tests. Quadratic performance in find_duplicate_orders needs scale testing. Overly broad exception handling in load_retry_count requires failure-path tests."
+  },
+  "limitations": [
+    "This is static, diff-only AI review; unchanged repository context may be missing.",
+    "Findings require human verification and do not replace security scanners or tests.",
+    "Only project rules retrieved for each changed hunk are considered."
+  ]
+}

@@ -1,0 +1,1 @@
+{"expected_findings":[{"category":"security","severity":"critical","file_path":"app/users.py","description":"Hardcoded credential and SQL injection risk."}]}

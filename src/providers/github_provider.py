@@ -21,10 +21,12 @@ class GitHubPRProvider(PRProvider):
         token: str | None = None,
         owner: str | None = None,
         repo: str | None = None,
+        timeout: float | None = None,
     ):
         self._token = token or os.environ["GITHUB_TOKEN"]
         self._owner = owner or os.environ["GITHUB_OWNER"]
         self._repo = repo or os.environ["GITHUB_REPO"]
+        self._timeout = timeout or float(os.getenv("GITHUB_TIMEOUT", "30"))
         self._base = "https://api.github.com"
         self._session = requests.Session()
         self._session.headers.update({
@@ -73,22 +75,25 @@ class GitHubPRProvider(PRProvider):
                     "line": c.line,
                     "side": "RIGHT",
                 },
+                timeout=self._timeout,
             ).raise_for_status()
 
     def approve(self, pr_id: str) -> None:
         self._session.post(
             f"{self._base}/repos/{self._owner}/{self._repo}/pulls/{pr_id}/reviews",
             json={"event": "APPROVE"},
+            timeout=self._timeout,
         ).raise_for_status()
 
     def request_changes(self, pr_id: str, summary: str) -> None:
         self._session.post(
             f"{self._base}/repos/{self._owner}/{self._repo}/pulls/{pr_id}/reviews",
             json={"body": f"**AI Review Summary**\n\n{summary}", "event": "REQUEST_CHANGES"},
+            timeout=self._timeout,
         ).raise_for_status()
 
     def _get(self, path: str) -> dict | list:
-        resp = self._session.get(self._base + path)
+        resp = self._session.get(self._base + path, timeout=self._timeout)
         resp.raise_for_status()
         return resp.json()
 

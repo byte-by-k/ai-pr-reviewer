@@ -23,7 +23,7 @@ Every team has code review standards — security practices, performance pattern
 ```mermaid
 flowchart TD
     subgraph setup ["⚙️ SETUP · run once"]
-        YAML["📄 codereviewrules.yaml\n15 rules"]
+        YAML["📄 codereviewrules.yaml\n17 rules"]
         CLI["embed-rules CLI"]
         DB[("ChromaDB\nvector store")]
         YAML --> CLI --> DB
@@ -85,7 +85,7 @@ Or use a `.env` file — the CLI loads it automatically.
 
 ```bash
 python -m src.cli embed-rules
-# → ChromaDB now contains 15 embedded rules.
+# → ChromaDB now contains 17 embedded rules.
 ```
 
 ### 4. Review a PR
@@ -128,7 +128,7 @@ rules:
     tags: [database, hibernate, jpa, loop]
 ```
 
-The included `codereviewrules.yaml` ships with 15 rules across:
+The included `codereviewrules.yaml` ships with 17 rules across:
 
 | Category | Rules |
 |---|---|
@@ -272,3 +272,104 @@ jobs:
 ## License
 
 MIT © Kamlesh
+
+---
+
+## Week 3 — Multi-Agent Code Review System
+
+The Week 3 extension preserves the original RAG-based reviewer and adds three
+specialist reviewers coordinated by LangGraph:
+
+```text
+PR diff → prepare_review
+        → correctness reviewer ┐
+        → security reviewer    ├→ aggregate → deduplicate → prioritize → report
+        → testing reviewer     ┘
+```
+
+- **Correctness reviewer:** bugs, resilience, performance, design, and maintainability
+- **Security reviewer:** secrets, injection, trust boundaries, and security rules
+- **Testing reviewer:** missing happy-path, failure-path, boundary, and regression tests
+- **Orchestrator:** merges exact duplicates, normalizes priority, and produces a
+  severity-ranked Markdown report
+
+Each specialist receives only rules from its own YAML categories. All model output
+must pass Pydantic validation. The system treats PR content as untrusted review
+material and never as instructions.
+
+### Safe multi-agent review
+
+Report-only mode is the default and makes no pull-request changes:
+
+```bash
+python -m src.cli review \
+  --provider github \
+  --pr-id 123 \
+  --mode multi-agent \
+  --output review-report.md
+```
+
+After a human checks the generated report, add `--publish` to post inline comments
+and a verdict. The previous single-reviewer implementation remains available with
+`--mode legacy --publish`.
+
+### Evaluation samples
+
+The final evaluation uses three public pull requests:
+
+- [PR 1](https://github.com/byte-by-k/ai-pr-reviewer/pull/1): mixed correctness,
+  security, and testing defects; expected verdict `request_changes`
+- [PR 2](https://github.com/byte-by-k/ai-pr-reviewer/pull/2): clean validated
+  implementation with tests; expected verdict `approve`
+- [PR 3](https://github.com/byte-by-k/ai-pr-reviewer/pull/3): correctness,
+  resilience, and missing-test defects; expected verdict `request_changes`
+
+The three actual verdicts matched expectations. Structured reports are committed
+under `evaluation/results/`, and `evaluation/EVALUATION_SUMMARY.md` documents the
+comparison. The smaller snapshots in `samples/` remain useful for deterministic
+unit-level evaluation.
+
+Save a structured JSON report by passing `--output evaluation/results/02_security.json`.
+The deterministic evaluator measures expected-finding detection and false positives:
+
+```bash
+python -m evaluation.evaluate \
+  --expected samples/02_security/expected.json \
+  --actual evaluation/results/02_security.json
+```
+
+Run automated tests with:
+
+```bash
+pytest -q
+```
+
+### Agent framework decisions
+
+- **Goal:** produce an evidence-backed first-pass PR review across correctness,
+  security, and test coverage.
+- **Surface:** command line plus GitHub pull requests.
+- **State:** LangGraph carries PR context, specialist results, and the final report;
+  Chroma and saved reports persist across runs.
+- **Tools:** GitHub retrieval, Chroma rule retrieval, Anthropic analysis, and optional
+  GitHub review publishing.
+- **Human in the loop:** report generation is read-only. The separate `--publish`
+  flag is required after a human reviews the output.
+- **Failure behavior:** model requests have bounded retries and timeouts; invalid
+  structured output receives one repair attempt; GitHub calls use a configurable
+  timeout; an empty rule index stops with setup guidance.
+- **Hard limits:** the agent does not merge branches, edit source code, delete data,
+  or publish findings by default.
+
+The full instructor-facing narrative is in `WEEK3_PROJECT_DOCUMENTATION.md`, and
+the timed recording walkthrough is in `WEEK3_DEMO_SCRIPT.md`.
+
+### Current limitations
+
+- Review is diff-only and may lack relevant unchanged repository context.
+- Exact duplicate removal is deterministic; semantic near-duplicate merging is a
+  future enhancement.
+- AI findings require human verification and do not replace SAST, dependency
+  scanning, tests, or professional security review.
+- Azure DevOps diff retrieval in the original adapter still requires a complete
+  file-diff API implementation before production use.

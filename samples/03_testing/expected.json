@@ -1,0 +1,1 @@
+{"expected_findings":[{"category":"testing","severity":"medium","file_path":"src/payments.py","description":"New validation and gateway failure paths need tests."}]}

@@ -1,0 +1,295 @@
+{
+  "pr_id": "1",
+  "title": "Demo: intentionally flawed checkout code",
+  "overall_risk": "critical",
+  "verdict": "request_changes",
+  "executive_summary": "15 distinct finding(s) remained after combining 3 specialist reviews. Highest severity: critical.",
+  "findings": [
+    {
+      "agent": "security",
+      "category": "Hardcoded Credentials",
+      "severity": "critical",
+      "confidence": "high",
+      "title": "Hardcoded password in source code",
+      "explanation": "The constant ADMIN_PASSWORD contains a plaintext password directly in the source code. This credential is visible to anyone with repository access and will be committed to version control history permanently. Attackers who gain read access to the repository can extract and abuse this credential.",
+      "file_path": "samples/intentionally_flawed_checkout.py",
+      "line": 10,
+      "evidence": "ADMIN_PASSWORD = \"demo-password-123\"",
+      "recommendation": "Remove the hardcoded password immediately. Store credentials in environment variables or a secrets management service (AWS Secrets Manager, Azure Key Vault, HashiCorp Vault). Access the credential at runtime using os.environ.get('ADMIN_PASSWORD') or a secrets client library.",
+      "suggested_test": null,
+      "matched_rule_ids": [
+        "SEC-001"
+      ],
+      "contributing_agents": [
+        "security"
+      ]
+    },
+    {
+      "agent": "security",
+      "category": "SQL Injection",
+      "severity": "critical",
+      "confidence": "high",
+      "title": "SQL injection vulnerability in find_customer function",
+      "explanation": "The find_customer function constructs a SQL query using f-string interpolation with the user-supplied email parameter. An attacker can inject arbitrary SQL by providing a malicious email value such as \"' OR '1'='1\" to bypass authentication or \"'; DROP TABLE customers; --\" to execute destructive commands. This allows complete database compromise.",
+      "file_path": "samples/intentionally_flawed_checkout.py",
+      "line": 26,
+      "evidence": "query = f\"SELECT id, email FROM customers WHERE email = '{email}'\"",
+      "recommendation": "Use parameterized queries with placeholders. Replace the vulnerable line with: query = \"SELECT id, email FROM customers WHERE email = ?\" and execute with connection.execute(query, (email,)).fetchall(). This ensures user input is treated as data, not executable SQL code.",
+      "suggested_test": null,
+      "matched_rule_ids": [
+        "SEC-002",
+        "SEC-003"
+      ],
+      "contributing_agents": [
+        "security"
+      ]
+    },
+    {
+      "agent": "security",
+      "category": "Command Injection",
+      "severity": "critical",
+      "confidence": "high",
+      "title": "Command injection vulnerability in ping_shipping_host function",
+      "explanation": "The ping_shipping_host function passes user-controlled hostname input directly into a shell command using shell=True. An attacker can inject arbitrary shell commands by providing input like \"example.com; rm -rf /\" or \"example.com && cat /etc/passwd\". This allows complete system compromise with the privileges of the running process.",
+      "file_path": "samples/intentionally_flawed_checkout.py",
+      "line": 34,
+      "evidence": "result = subprocess.run(\n        f\"ping -c 1 {hostname}\",\n        shell=True,",
+      "recommendation": "Never use shell=True with user input. Pass arguments as a list and validate the hostname format. Replace with: subprocess.run(['ping', '-c', '1', hostname], shell=False, capture_output=True, text=True). Additionally, validate that hostname matches expected patterns (e.g., valid domain or IP address) before executing the command.",
+      "suggested_test": null,
+      "matched_rule_ids": [
+        "SEC-003"
+      ],
+      "contributing_agents": [
+        "security"
+      ]
+    },
+    {
+      "agent": "security",
+      "category": "Input Validation",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Missing input validation in calculate_discounted_total function",
+      "explanation": "The calculate_discounted_total function accepts discount_percent without validation. An attacker can supply negative values to increase prices, values over 100 to create negative totals, or extreme values to cause financial calculation errors. This can lead to revenue loss or accounting inconsistencies.",
+      "file_path": "samples/intentionally_flawed_checkout.py",
+      "line": 14,
+      "evidence": "def calculate_discounted_total(price: float, discount_percent: float) -> float:\n    \"\"\"Return a discounted price without validating the supplied percentage.\"\"\"\n    return price - (price * discount_percent / 100)",
+      "recommendation": "Validate that discount_percent is within acceptable bounds (0 to 100) and that price is positive. Add checks at the start of the function: if not (0 <= discount_percent <= 100): raise ValueError('Discount must be between 0 and 100'). Consider also validating that price >= 0.",
+      "suggested_test": null,
+      "matched_rule_ids": [
+        "SEC-003"
+      ],
+      "contributing_agents": [
+        "security"
+      ]
+    },
+    {
+      "agent": "correctness",
+      "category": "division-by-zero",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Division by zero when order_count is zero",
+      "explanation": "The function `average_order_value` performs division without checking if `order_count` is zero. When `order_count=0`, the operation `total_revenue / order_count` raises a ZeroDivisionError at runtime, causing the application to crash.",
+      "file_path": "samples/intentionally_flawed_checkout.py",
+      "line": 20,
+      "evidence": "return total_revenue / order_count",
+      "recommendation": "Add a guard clause to check if order_count is zero before division. Return 0.0 or raise a domain-specific exception with a clear message: `if order_count == 0: return 0.0` or `if order_count == 0: raise ValueError('Cannot calculate average with zero orders')`",
+      "suggested_test": null,
+      "matched_rule_ids": [],
+      "contributing_agents": [
+        "correctness"
+      ]
+    },
+    {
+      "agent": "testing",
+      "category": "missing_security_tests",
+      "severity": "high",
+      "confidence": "high",
+      "title": "find_customer lacks SQL injection security tests",
+      "explanation": "This public function has no tests, including no security tests for SQL injection. The function uses unsafe string interpolation to build SQL queries. Tests must verify that malicious email inputs (e.g., \"' OR '1'='1\") do not bypass authentication or extract unintended data.",
+      "file_path": "samples/intentionally_flawed_checkout.py",
+      "line": 24,
+      "evidence": "def find_customer(database_path: str, email: str) -> list[tuple]:\n    \"\"\"Look up a customer using unsafe SQL string interpolation.\"\"\"\n    connection = sqlite3.connect(database_path)\n    query = f\"SELECT id, email FROM customers WHERE email = '{email}'\"\n    rows = connection.execute(query).fetchall()",
+      "recommendation": "Add security tests that attempt SQL injection payloads: (1) email=\"' OR '1'='1\" should not return all customers, (2) email=\"'; DROP TABLE customers; --\" should not execute destructive commands. Also add happy-path tests with valid emails and failure-path tests with non-existent emails. Verify the connection is closed in all cases.",
+      "suggested_test": "test_find_customer_valid_email(), test_find_customer_not_found(), test_find_customer_sql_injection_or_clause(), test_find_customer_sql_injection_drop_table(), test_find_customer_closes_connection()",
+      "matched_rule_ids": [
+        "TST-001"
+      ],
+      "contributing_agents": [
+        "testing"
+      ]
+    },
+    {
+      "agent": "correctness",
+      "category": "resource-leak",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Database connection never closed in find_customer",
+      "explanation": "The function `find_customer` opens a SQLite connection on line 25 but never closes it. This causes a resource leak where database connections accumulate over repeated calls, eventually exhausting available connections and causing application failures.",
+      "file_path": "samples/intentionally_flawed_checkout.py",
+      "line": 25,
+      "evidence": "connection = sqlite3.connect(database_path)\n    query = f\"SELECT id, email FROM customers WHERE email = '{email}'\"\n    rows = connection.execute(query).fetchall()\n    return rows",
+      "recommendation": "Use a context manager to ensure the connection is properly closed: `with sqlite3.connect(database_path) as connection:` or explicitly call `connection.close()` in a try-finally block.",
+      "suggested_test": null,
+      "matched_rule_ids": [],
+      "contributing_agents": [
+        "correctness"
+      ]
+    },
+    {
+      "agent": "testing",
+      "category": "missing_security_tests",
+      "severity": "high",
+      "confidence": "high",
+      "title": "ping_shipping_host lacks command injection security tests",
+      "explanation": "This public function has no tests, including no security tests for command injection. The function uses shell=True with unsanitized user input. Tests must verify that malicious hostname inputs (e.g., \"example.com; rm -rf /\") do not execute arbitrary commands.",
+      "file_path": "samples/intentionally_flawed_checkout.py",
+      "line": 32,
+      "evidence": "def ping_shipping_host(hostname: str) -> str:\n    \"\"\"Run a diagnostic command with unchecked user-controlled input.\"\"\"\n    result = subprocess.run(\n        f\"ping -c 1 {hostname}\",\n        shell=True,\n        capture_output=True,\n        text=True,\n    )",
+      "recommendation": "Add security tests that attempt command injection payloads: (1) hostname=\"example.com; cat /etc/passwd\" should not execute the second command, (2) hostname=\"example.com && echo hacked\" should not execute the echo. Also add happy-path tests with valid hostnames and failure-path tests with invalid hostnames or network errors.",
+      "suggested_test": "test_ping_shipping_host_valid_hostname(), test_ping_shipping_host_invalid_hostname(), test_ping_shipping_host_command_injection_semicolon(), test_ping_shipping_host_command_injection_ampersand(), test_ping_shipping_host_command_injection_pipe()",
+      "matched_rule_ids": [
+        "TST-001"
+      ],
+      "contributing_agents": [
+        "testing"
+      ]
+    },
+    {
+      "agent": "correctness",
+      "category": "mutable-default-argument",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Mutable default argument causes shared state bug",
+      "explanation": "The function `add_audit_event` uses a mutable list `[]` as a default argument. In Python, default arguments are evaluated once at function definition time, not at call time. This means all calls to `add_audit_event` without providing an `events` argument will share the same list object, causing unintended state accumulation across invocations.",
+      "file_path": "samples/intentionally_flawed_checkout.py",
+      "line": 43,
+      "evidence": "def add_audit_event(event: str, events: list[str] = []) -> list[str]:\n    \"\"\"Append to a shared mutable default list.\"\"\"\n    events.append(event)\n    return events",
+      "recommendation": "Use `None` as the default and create a new list inside the function: `def add_audit_event(event: str, events: list[str] = None) -> list[str]:\n    if events is None:\n        events = []\n    events.append(event)\n    return events`",
+      "suggested_test": null,
+      "matched_rule_ids": [],
+      "contributing_agents": [
+        "correctness"
+      ]
+    },
+    {
+      "agent": "testing",
+      "category": "missing_unit_tests",
+      "severity": "medium",
+      "confidence": "high",
+      "title": "calculate_discounted_total lacks unit tests for validation and boundary cases",
+      "explanation": "This public function has no tests. It accepts unchecked discount_percent values that could be negative, exceed 100, or cause incorrect pricing. Tests should verify happy-path discounts, boundary values (0%, 100%), invalid inputs (negative, >100%), and edge cases (very large prices).",
+      "file_path": "samples/intentionally_flawed_checkout.py",
+      "line": 14,
+      "evidence": "def calculate_discounted_total(price: float, discount_percent: float) -> float:\n    \"\"\"Return a discounted price without validating the supplied percentage.\"\"\"\n    return price - (price * discount_percent / 100)",
+      "recommendation": "Add unit tests covering: (1) valid discount (e.g., 10% off $100 = $90), (2) 0% discount, (3) 100% discount, (4) negative discount_percent, (5) discount_percent > 100, (6) negative price, (7) zero price.",
+      "suggested_test": "test_calculate_discounted_total_valid_discount(), test_calculate_discounted_total_zero_discount(), test_calculate_discounted_total_full_discount(), test_calculate_discounted_total_negative_discount(), test_calculate_discounted_total_excessive_discount()",
+      "matched_rule_ids": [
+        "TST-001"
+      ],
+      "contributing_agents": [
+        "testing"
+      ]
+    },
+    {
+      "agent": "correctness",
+      "category": "input-validation",
+      "severity": "medium",
+      "confidence": "high",
+      "title": "Missing validation allows negative or excessive discount percentages",
+      "explanation": "The function `calculate_discounted_total` accepts any float value for `discount_percent` without validation. Negative values would increase the price instead of discounting it, and values over 100 would result in negative prices. Both scenarios represent incorrect business logic that could cause financial errors.",
+      "file_path": "samples/intentionally_flawed_checkout.py",
+      "line": 15,
+      "evidence": "def calculate_discounted_total(price: float, discount_percent: float) -> float:\n    \"\"\"Return a discounted price without validating the supplied percentage.\"\"\"\n    return price - (price * discount_percent / 100)",
+      "recommendation": "Add input validation to ensure discount_percent is within valid bounds: `if not 0 <= discount_percent <= 100: raise ValueError(f'Discount percent must be between 0 and 100, got {discount_percent}')`. Also validate that price is non-negative.",
+      "suggested_test": null,
+      "matched_rule_ids": [],
+      "contributing_agents": [
+        "correctness"
+      ]
+    },
+    {
+      "agent": "testing",
+      "category": "missing_unit_tests",
+      "severity": "medium",
+      "confidence": "high",
+      "title": "average_order_value lacks unit tests for division-by-zero failure path",
+      "explanation": "This public function has no tests. The code will raise ZeroDivisionError when order_count is zero. Tests must verify the happy path (positive order_count) and the failure path (zero order_count), plus boundary cases (negative values, very large numbers).",
+      "file_path": "samples/intentionally_flawed_checkout.py",
+      "line": 19,
+      "evidence": "def average_order_value(total_revenue: float, order_count: int) -> float:\n    \"\"\"Calculate the average; zero orders currently trigger a runtime error.\"\"\"\n    return total_revenue / order_count",
+      "recommendation": "Add unit tests covering: (1) valid calculation (e.g., $1000 / 10 orders = $100), (2) zero order_count raises ZeroDivisionError or returns a sentinel value, (3) negative order_count, (4) zero revenue with positive orders.",
+      "suggested_test": "test_average_order_value_valid_orders(), test_average_order_value_zero_orders_raises_error(), test_average_order_value_negative_orders(), test_average_order_value_zero_revenue()",
+      "matched_rule_ids": [
+        "TST-001"
+      ],
+      "contributing_agents": [
+        "testing"
+      ]
+    },
+    {
+      "agent": "security",
+      "category": "Resource Management",
+      "severity": "medium",
+      "confidence": "high",
+      "title": "Database connection not properly closed in find_customer function",
+      "explanation": "The find_customer function opens a database connection but never closes it. If this function is called repeatedly, it will leak database connections, eventually exhausting the connection pool. While primarily a reliability issue, connection exhaustion can be exploited for denial-of-service attacks.",
+      "file_path": "samples/intentionally_flawed_checkout.py",
+      "line": 25,
+      "evidence": "connection = sqlite3.connect(database_path)\n    query = f\"SELECT id, email FROM customers WHERE email = '{email}'\"\n    rows = connection.execute(query).fetchall()\n    return rows",
+      "recommendation": "Use a context manager to ensure the connection is properly closed. Wrap the connection logic with: with sqlite3.connect(database_path) as connection: ... This guarantees cleanup even if an exception occurs.",
+      "suggested_test": null,
+      "matched_rule_ids": [],
+      "contributing_agents": [
+        "security"
+      ]
+    },
+    {
+      "agent": "correctness",
+      "category": "error-handling",
+      "severity": "medium",
+      "confidence": "medium",
+      "title": "No exception handling for subprocess execution failures",
+      "explanation": "The function `ping_shipping_host` executes a subprocess command without any exception handling. If the subprocess fails to start, times out, or encounters other runtime errors, the function will propagate an unhandled exception. This makes the calling code fragile and difficult to handle errors gracefully.",
+      "file_path": "samples/intentionally_flawed_checkout.py",
+      "line": 34,
+      "evidence": "result = subprocess.run(\n        f\"ping -c 1 {hostname}\",\n        shell=True,\n        capture_output=True,\n        text=True,\n    )\n    return result.stdout",
+      "recommendation": "Wrap the subprocess.run call in a try-except block to catch subprocess.SubprocessError, subprocess.TimeoutExpired, and OSError. Log the exception and either return a meaningful error indicator or raise a domain-specific exception. Consider adding a timeout parameter to prevent indefinite hangs.",
+      "suggested_test": null,
+      "matched_rule_ids": [
+        "RES-001"
+      ],
+      "contributing_agents": [
+        "correctness"
+      ]
+    },
+    {
+      "agent": "testing",
+      "category": "missing_unit_tests",
+      "severity": "medium",
+      "confidence": "high",
+      "title": "add_audit_event lacks tests for mutable default argument bug",
+      "explanation": "This public function has no tests. The mutable default argument (events: list[str] = []) causes state to persist across calls, a classic Python bug. Tests must verify that multiple calls without an explicit events argument do not share the same list, and that providing an explicit list works correctly.",
+      "file_path": "samples/intentionally_flawed_checkout.py",
+      "line": 43,
+      "evidence": "def add_audit_event(event: str, events: list[str] = []) -> list[str]:\n    \"\"\"Append to a shared mutable default list.\"\"\"\n    events.append(event)\n    return events",
+      "recommendation": "Add unit tests covering: (1) first call with default argument returns single-item list, (2) second call with default argument incorrectly returns two-item list (demonstrating the bug), (3) explicit empty list argument works correctly, (4) explicit non-empty list argument appends correctly.",
+      "suggested_test": "test_add_audit_event_first_call_default(), test_add_audit_event_second_call_default_shares_state(), test_add_audit_event_explicit_empty_list(), test_add_audit_event_explicit_nonempty_list()",
+      "matched_rule_ids": [
+        "TST-001"
+      ],
+      "contributing_agents": [
+        "testing"
+      ]
+    }
+  ],
+  "agent_summaries": {
+    "correctness": "Found 5 correctness defects: division by zero, unclosed database connection, mutable default argument, missing input validation, and empty catch pattern risk.",
+    "security": "Critical security vulnerabilities detected: hardcoded credential, SQL injection, and command injection. All three issues pose immediate exploitation risks and must be remediated before any production use.",
+    "testing": "Five public functions lack any unit tests. Missing coverage includes happy-path validation, boundary conditions (zero division, SQL injection, command injection), error handling, and the mutable default argument bug."
+  },
+  "limitations": [
+    "This is static, diff-only AI review; unchanged repository context may be missing.",
+    "Findings require human verification and do not replace security scanners or tests.",
+    "Only project rules retrieved for each changed hunk are considered."
+  ]
+}

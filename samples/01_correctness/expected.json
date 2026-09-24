@@ -1,0 +1,1 @@
+{"expected_findings":[{"category":"correctness","severity":"high","file_path":"src/providers/azure_devops.py","description":"The method returns a path instead of diff content."}]}

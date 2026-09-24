@@ -1,0 +1,8 @@
+@@ -20,3 +20,10 @@ class PaymentService:
++    def refund(self, payment_id: str, amount: Decimal) -> Receipt:
++        if amount <= 0:
++            raise ValueError("amount must be positive")
++        payment = self.gateway.load(payment_id)
++        if amount > payment.balance:
++            raise ValueError("refund exceeds balance")
++        return self.gateway.refund(payment_id, amount)

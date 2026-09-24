@@ -1,11 +1,11 @@
-"""
-Load and parse code review rules from codereviewrules.yaml.
-"""
+"""Load and validate code-review rules from YAML."""
 
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
+
 import yaml
 
 
@@ -26,11 +26,6 @@ class Rule:
     tags: List[str] = field(default_factory=list)
 
     def to_embedding_text(self) -> str:
-        """
-        Produce a rich text representation used for embedding into ChromaDB.
-        Combines name, description, tags and examples so semantic search
-        finds the rule even when the diff doesn't use the exact rule keywords.
-        """
         parts = [
             f"Rule: {self.name}",
             f"Category: {self.category}",
@@ -47,7 +42,6 @@ class Rule:
         return "\n".join(parts)
 
     def to_prompt_text(self) -> str:
-        """Compact representation used inside the review prompt."""
         lines = [f"[{self.id}] {self.name} (severity: {self.severity})"]
         lines.append(f"  {self.description.strip()}")
         if self.examples and self.examples.violation:
@@ -56,14 +50,10 @@ class Rule:
 
 
 def load_rules(yaml_path: str | Path) -> List[Rule]:
-    """Parse codereviewrules.yaml and return a list of Rule objects."""
     path = Path(yaml_path)
     if not path.exists():
         raise FileNotFoundError(f"Rules file not found: {path}")
-
-    with open(path, "r") as f:
-        data = yaml.safe_load(f)
-
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     rules: List[Rule] = []
     for item in data.get("rules", []):
         raw_examples = item.get("examples")
@@ -84,5 +74,4 @@ def load_rules(yaml_path: str | Path) -> List[Rule]:
                 tags=item.get("tags", []),
             )
         )
-
     return rules

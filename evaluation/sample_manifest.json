@@ -1,0 +1,22 @@
+{
+  "samples": [
+    {
+      "pr": 1,
+      "url": "https://github.com/byte-by-k/ai-pr-reviewer/pull/1",
+      "scenario": "mixed intentional defects",
+      "expected_verdict": "request_changes"
+    },
+    {
+      "pr": 2,
+      "url": "https://github.com/byte-by-k/ai-pr-reviewer/pull/2",
+      "scenario": "clean validated change with tests",
+      "expected_verdict": "approve"
+    },
+    {
+      "pr": 3,
+      "url": "https://github.com/byte-by-k/ai-pr-reviewer/pull/3",
+      "scenario": "correctness and resilience defects",
+      "expected_verdict": "request_changes"
+    }
+  ]
+}

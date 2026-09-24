@@ -1,0 +1,5 @@
+@@ -91,7 +91,7 @@ class AzureDevOpsPRProvider(PRProvider):
+     def _fetch_file_diff(self, pr_id: str, iteration: int, path: str) -> str:
+         url = f"{self._base}/pullrequests/{pr_id}/iterations/{iteration}/changes"
+-        return self._get(url)["diff"]
++        return path

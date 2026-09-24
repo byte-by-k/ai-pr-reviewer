@@ -3,7 +3,7 @@ ChromaDB vector store — persists and queries embedded code review rules.
 """
 
 from __future__ import annotations
-from typing import List, Tuple
+from typing import List, Sequence, Tuple
 import chromadb
 from chromadb.utils import embedding_functions
 from src.rules.loader import Rule
@@ -50,11 +50,25 @@ class RuleVectorStore:
             ],
         )
 
-    def query(self, diff_chunk: str, top_k: int = 5) -> List[Tuple[str, float]]:
-        """Retrieve top_k most semantically relevant rule IDs for a diff chunk."""
+    def query(
+        self,
+        diff_chunk: str,
+        top_k: int = 5,
+        categories: Sequence[str] | None = None,
+    ) -> List[Tuple[str, float]]:
+        """Retrieve relevant rules, optionally restricted by rule category."""
+        where = None
+        if categories:
+            values = list(dict.fromkeys(categories))
+            where = (
+                {"category": values[0]}
+                if len(values) == 1
+                else {"category": {"$in": values}}
+            )
         results = self._collection.query(
             query_texts=[diff_chunk],
             n_results=min(top_k, self._collection.count()),
+            where=where,
             include=["distances"],
         )
         return list(zip(results["ids"][0], results["distances"][0]))

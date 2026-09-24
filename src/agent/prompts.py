@@ -43,9 +43,9 @@ REVIEW_PROMPT_TEMPLATE = """
 {rules_text}
 
 ## Code Diff
-\`\`\`diff
+```diff
 {diff_chunk}
-\`\`\`
+```
 
 Review the diff above against the provided rules. Return only valid JSON.
 """
