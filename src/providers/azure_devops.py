@@ -104,6 +104,23 @@ class AzureDevOpsPRProvider(PRProvider):
             self._session.post(url, json=body).raise_for_status()
 
     def approve(self, pr_id: str) -> None:
+        comment_url = (
+            f"{self._base}/git/repositories/{self._repo}"
+            f"/pullrequests/{pr_id}/threads?api-version=7.1"
+        )
+        self._session.post(
+            comment_url,
+            json={
+                "comments": [
+                    {
+                        "parentCommentId": 0,
+                        "content": "No issues to report - Recommended for Approval",
+                        "commentType": 1,
+                    }
+                ],
+                "status": "closed",
+            },
+        ).raise_for_status()
         reviewer_id = self._get_reviewer_id()
         url = (
             f"{self._base}/git/repositories/{self._repo}"
@@ -118,6 +135,23 @@ class AzureDevOpsPRProvider(PRProvider):
         )
         body = {
             "comments": [{"parentCommentId": 0, "content": f"**AI Review Summary**\n\n{summary}", "commentType": 1}],
+            "status": "active",
+        }
+        self._session.post(url, json=body).raise_for_status()
+
+    def comment(self, pr_id: str, summary: str) -> None:
+        url = (
+            f"{self._base}/git/repositories/{self._repo}"
+            f"/pullrequests/{pr_id}/threads?api-version=7.1"
+        )
+        body = {
+            "comments": [
+                {
+                    "parentCommentId": 0,
+                    "content": f"**AI Review Summary**\n\n{summary}",
+                    "commentType": 1,
+                }
+            ],
             "status": "active",
         }
         self._session.post(url, json=body).raise_for_status()

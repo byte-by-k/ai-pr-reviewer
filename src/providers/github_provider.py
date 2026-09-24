@@ -79,16 +79,25 @@ class GitHubPRProvider(PRProvider):
             ).raise_for_status()
 
     def approve(self, pr_id: str) -> None:
+        # Always leave a visible clean-review result. A COMMENT event works for
+        # both self-authored and third-party pull requests.
         self._submit_review(
             pr_id,
-            event="APPROVE",
-            body="AI review completed with no blocking findings.",
+            event="COMMENT",
+            body="No issues to report - Recommended for Approval",
         )
 
     def request_changes(self, pr_id: str, summary: str) -> None:
         self._submit_review(
             pr_id,
             event="REQUEST_CHANGES",
+            body=f"**AI Review Summary**\n\n{summary}",
+        )
+
+    def comment(self, pr_id: str, summary: str) -> None:
+        self._submit_review(
+            pr_id,
+            event="COMMENT",
             body=f"**AI Review Summary**\n\n{summary}",
         )
 

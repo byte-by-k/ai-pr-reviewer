@@ -63,3 +63,5 @@ class MultiAgentReviewService:
             self.provider.approve(pr_id)
         elif report.verdict == "request_changes":
             self.provider.request_changes(pr_id, report.executive_summary)
+        else:
+            self.provider.comment(pr_id, report.executive_summary)

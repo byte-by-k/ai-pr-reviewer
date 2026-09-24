@@ -65,3 +65,7 @@ class PRProvider(ABC):
     @abstractmethod
     def request_changes(self, pr_id: str, summary: str) -> None:
         """Request changes with an overall summary comment."""
+
+    @abstractmethod
+    def comment(self, pr_id: str, summary: str) -> None:
+        """Post a non-blocking overall review summary."""
