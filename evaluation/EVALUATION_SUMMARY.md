@@ -1,6 +1,6 @@
 # Week 3 Evaluation Summary
 
-The same multi-agent workflow was run in report-only mode against three public GitHub pull requests. No review comments or verdicts were posted to GitHub.
+The same multi-agent workflow was run against three public GitHub pull requests. The reports were inspected before publication. PRs with violations contain inline findings and an overall summary, while the clean PR contains `No issues to report - Recommended for Approval`.
 
 | PR | Scenario | Expected | Actual | Risk | Findings |
 |---:|---|---|---|---|---:|
@@ -13,8 +13,9 @@ The same multi-agent workflow was run in report-only mode against three public G
 - Verdict agreement: 3 of 3 samples
 - Clean-sample false positives: 0 after the PR-level testing-context correction
 - Structured agent completion: 9 of 9 final specialist executions
-- Automated tests: 10 passed
-- Human approval: preserved; every run used report-only mode
+- Automated tests: 17 passed, covering the graph, structured output, evaluation, publishing, and CLI confirmation behavior
+- Human approval: preserved through a confirmation prompt that defaults to No
+- Publication behavior: PR 1 has 15 inline findings, PR 2 has the clean approval recommendation, and PR 3 has 9 inline findings
 
 ## Important iteration
 

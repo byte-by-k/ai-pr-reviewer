@@ -49,7 +49,12 @@ def embed_rules(rules_file: str, chroma_dir: str, force: bool):
 )
 @click.option("--top-k", default=5, type=click.IntRange(1, 20), show_default=True)
 @click.option("--output", default="review-report.md", show_default=True)
-@click.option("--publish", is_flag=True, help="Post comments and verdict. Default is report-only.")
+@click.option(
+    "--publish",
+    is_flag=True,
+    default=False,
+    help="Post comments without prompting. When omitted, confirm after generating the report.",
+)
 def review(
     provider: str,
     pr_id: str,
@@ -92,7 +97,8 @@ def review(
     report = service.review_to_file(pr_id, output)
     click.echo(f"Saved prioritized report to {output}")
     click.echo(f"Verdict: {report.verdict}; risk: {report.overall_risk}")
-    if publish:
+    publish_review = _should_publish(publish)
+    if publish_review:
         service.publish(pr_id, report)
         click.echo("Published review to the pull request.")
     else:
@@ -109,6 +115,16 @@ def _build_provider(name: str):
 
         return GitHubPRProvider()
     raise ValueError(f"Unsupported provider: {name}")
+
+
+def _should_publish(publish: bool) -> bool:
+    """Skip confirmation only when the caller explicitly enabled publishing."""
+    if publish:
+        return True
+    return click.confirm(
+        "Post the review comments to the pull request?",
+        default=False,
+    )
 
 
 if __name__ == "__main__":

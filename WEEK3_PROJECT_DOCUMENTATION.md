@@ -2,7 +2,7 @@
 
 ## Project overview
 
-AI PR Reviewer is a LangGraph-based multi-agent code review system built for Project 3E. It helps software engineers review GitHub pull requests by delegating the same diff to three specialists: a correctness reviewer, a security reviewer, and a testing reviewer. A deterministic orchestrator combines their validated findings, removes exact duplicates, assigns an overall risk level, and writes a prioritized report. The default workflow is read-only; publishing comments or a verdict requires a separate `--publish` action after human review.
+AI PR Reviewer is a LangGraph-based multi-agent code review system built for Project 3E. It helps software engineers review GitHub pull requests by delegating the same diff to three specialists: a correctness reviewer, a security reviewer, and a testing reviewer. A deterministic orchestrator combines their validated findings, removes exact duplicates, assigns an overall risk level, and writes a prioritized report. After generating the report, the CLI asks whether to publish and defaults to No. Supplying `--publish` bypasses the prompt and publishes immediately. A published review always leaves a visible result.
 
 **Project one-liner:** My agent helps software engineering teams review pull requests in a command-line workflow, replacing repetitive manual bug, security, and test-coverage analysis. It retrieves code and project rules autonomously, hands off the final report to a human before any GitHub write, and succeeds when it produces a useful prioritized report across three representative pull requests.
 
@@ -51,7 +51,7 @@ No long-term conversational memory is required. Persistent state consists of the
 
 ## Human in the loop and safety limits
 
-Report generation is read-only by default. The agent never posts comments, approves a pull request, or requests changes unless the user explicitly reruns the command with `--publish`. A human is expected to inspect the evidence and recommendations first. The system never merges code, modifies source branches, deletes records, or treats pull-request text as trusted instructions.
+Report generation is read-only until the user approves the publishing step. Without `--publish`, the CLI asks `Post the review comments to the pull request?` and defaults to No. With `--publish`, it posts without prompting, which is suitable for an intentionally configured automation. When publishing, each supported violation is posted as an inline comment and the system adds an overall review summary. A clean review posts the exact message `No issues to report - Recommended for Approval`. If the pull-request author is also the reviewer, GitHub blocks formal approval and request-changes verdicts; the adapter preserves the result as a normal review comment. The system never merges code, modifies source branches, or deletes records.
 
 Prompt-injection resistance is included in every specialist system prompt: code, comments, filenames, rule text, and PR descriptions are treated as untrusted review material rather than instructions. Findings are advisory and do not replace human review, automated tests, SAST, dependency scanning, or professional security assessment.
 
@@ -77,7 +77,7 @@ The project rule dataset is `codereviewrules.yaml`. It contains human-authored s
 
 The first iteration used the original single reviewer and directly generated comments. The Week 3 iteration separated responsibilities into three specialists and introduced LangGraph state and deterministic aggregation. The next iteration added Pydantic structured output, but the correctness and testing agents occasionally returned invalid JSON. I added a schema-explicit prompt, robust JSON extraction, exact agent validation, and one bounded repair retry.
 
-Evaluation of the clean PR then revealed a workflow defect: the testing specialist reviewed the production file before seeing the test file and produced a contradictory missing-tests finding. I changed the testing node to evaluate the complete pull-request diff as one unit. On rerun, the clean PR received `approve` with no findings. This was the most important evaluation-driven improvement.
+Evaluation of the clean PR then revealed a workflow defect: the testing specialist reviewed the production file before seeing the test file and produced a contradictory missing-tests finding. I changed the testing node to evaluate the complete pull-request diff as one unit. On rerun, the clean PR received `approve` with no findings. The final publishing iteration made the outcome visible for every review: violations produce inline comments plus a summary, while clean changes receive a clear approval recommendation. The CLI now confirms publishing interactively unless `--publish` is supplied.
 
 ## Evaluation results
 
@@ -87,11 +87,11 @@ Evaluation of the clean PR then revealed a workflow defect: the testing speciali
 | PR 2 clean and tested | Approve | Approve | 0 | No false positives after PR-level testing review fix |
 | PR 3 correctness defects | Request changes | Request changes | 9 | Correctness and missing-test risks were detected |
 
-All three expected verdicts matched. All nine specialist executions produced valid structured summaries in the final evaluation. Ten automated tests cover model validation, retry behavior, graph execution, orchestration, reporting, evaluation metrics, and PR-level testing context.
+All three expected verdicts matched. All nine specialist executions produced valid structured summaries in the final evaluation. Seventeen automated tests cover model validation, retry behavior, graph execution, orchestration, reporting, evaluation metrics, PR-level testing context, self-authored PR fallback, publishing outcomes, and CLI confirmation behavior.
 
 ## Failure behavior
 
-Anthropic requests use a bounded timeout and retry configuration. If a specialist response is invalid, the model receives one repair request; a second failure produces a safe empty specialist result with a visible failure summary rather than unvalidated content. GitHub requests use a configurable timeout. Empty Chroma state stops the command with setup guidance. The CLI remains report-only unless the user deliberately enables publishing.
+Anthropic requests use a bounded timeout and retry configuration. If a specialist response is invalid, the model receives one repair request; a second failure produces a safe empty specialist result with a visible failure summary rather than unvalidated content. GitHub requests use a configurable timeout. Empty Chroma state stops the command with setup guidance. Publishing handles GitHub's self-review restriction by falling back to a non-blocking review comment. The CLI defaults the interactive publishing confirmation to No.
 
 ## Learnings and observations
 

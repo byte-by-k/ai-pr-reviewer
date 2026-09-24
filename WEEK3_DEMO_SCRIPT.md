@@ -28,7 +28,7 @@ While it runs, explain that each specialist receives only its relevant retrieved
 
 Open `review-report.md`. Show the overall `Request Changes` verdict, severity table, and representative findings: SQL injection from security, division by zero or mutable default state from correctness, and missing boundary or security tests from testing. Point out the evidence, file location, recommendation, confidence, and suggested test.
 
-Explain that this report is a recommendation. A human checks it before publishing. Do not use `--publish` during the recording.
+Explain that this report is a recommendation. The CLI asks whether to post the review comments and defaults to No, preserving the human approval boundary. Show the existing comments on PR 1: violations appear inline with a final summary. Then show PR 2, where the clean result posts `No issues to report - Recommended for Approval`. Do not publish again during the recording because that would create duplicate comments.
 
 ## 3:05 to 3:50 Evaluation and iteration
 
@@ -38,7 +38,7 @@ Explain the iteration: the first testing agent reviewed files separately and inc
 
 ## 3:50 to 4:30 Reliability and conclusion
 
-The model output is validated by Pydantic. Invalid JSON receives one repair retry, API operations have timeouts, and failure summaries remain visible. Pull-request content is treated as untrusted data to reduce prompt-injection risk. Ten automated tests pass.
+The model output is validated by Pydantic. Invalid JSON receives one repair retry, API operations have timeouts, and failure summaries remain visible. Pull-request content is treated as untrusted data to reduce prompt-injection risk. Publishing always leaves a visible result, and `--publish` supports deliberate non-interactive execution while the default path asks for confirmation. Seventeen automated tests pass.
 
 The main limitation is that analysis is diff-only and AI severity still needs human judgment. The project demonstrates multi-agent delegation, LangGraph state, retrieval, structured output, error recovery, evaluation, and a deliberate human approval boundary.
 
@@ -48,6 +48,6 @@ The main limitation is that analysis is diff-only and AI severity still needs hu
 - Hide `.env`, API keys, browser bookmarks, and personal notifications.
 - Open PR 1, the architecture section, and the report before recording.
 - Activate `.venv` and run `python -m src.cli embed-rules` before recording.
-- Use report-only mode; do not add `--publish`.
+- Do not add `--publish` during the live run; answer No when the CLI asks to post comments.
 - Keep the recording under five minutes.
 - Upload the video and paste its share link into the submission form.

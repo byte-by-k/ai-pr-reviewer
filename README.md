@@ -309,9 +309,21 @@ python -m src.cli review \
   --output review-report.md
 ```
 
-After a human checks the generated report, add `--publish` to post inline comments
-and a verdict. The previous single-reviewer implementation remains available with
-`--mode legacy --publish`.
+After generating the report, the CLI asks whether to post the review comments and
+defaults to `No`. Pass `--publish` to publish immediately without the prompt, such
+as in an intentionally configured CI workflow. The previous single-reviewer
+implementation remains available with `--mode legacy --publish`.
+
+Every published review leaves a visible result. Violations produce line-specific
+comments plus an overall summary. A clean review posts exactly:
+
+```text
+No issues to report - Recommended for Approval
+```
+
+GitHub does not allow authors to approve or request changes on their own pull
+requests. In that case, the provider preserves the result as a normal review
+comment instead of failing the publication step.
 
 ### Evaluation samples
 
@@ -353,8 +365,8 @@ pytest -q
   Chroma and saved reports persist across runs.
 - **Tools:** GitHub retrieval, Chroma rule retrieval, Anthropic analysis, and optional
   GitHub review publishing.
-- **Human in the loop:** report generation is read-only. The separate `--publish`
-  flag is required after a human reviews the output.
+- **Human in the loop:** after report generation, publishing requires confirmation
+  and defaults to No. `--publish` explicitly bypasses the prompt.
 - **Failure behavior:** model requests have bounded retries and timeouts; invalid
   structured output receives one repair attempt; GitHub calls use a configurable
   timeout; an empty rule index stops with setup guidance.
