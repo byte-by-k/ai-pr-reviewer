@@ -79,18 +79,41 @@ class GitHubPRProvider(PRProvider):
             ).raise_for_status()
 
     def approve(self, pr_id: str) -> None:
-        self._session.post(
-            f"{self._base}/repos/{self._owner}/{self._repo}/pulls/{pr_id}/reviews",
-            json={"event": "APPROVE"},
-            timeout=self._timeout,
-        ).raise_for_status()
+        self._submit_review(
+            pr_id,
+            event="APPROVE",
+            body="AI review completed with no blocking findings.",
+        )
 
     def request_changes(self, pr_id: str, summary: str) -> None:
-        self._session.post(
-            f"{self._base}/repos/{self._owner}/{self._repo}/pulls/{pr_id}/reviews",
-            json={"body": f"**AI Review Summary**\n\n{summary}", "event": "REQUEST_CHANGES"},
+        self._submit_review(
+            pr_id,
+            event="REQUEST_CHANGES",
+            body=f"**AI Review Summary**\n\n{summary}",
+        )
+
+    def _submit_review(self, pr_id: str, event: str, body: str) -> None:
+        """Submit a verdict, falling back to a comment for self-authored PRs."""
+        url = f"{self._base}/repos/{self._owner}/{self._repo}/pulls/{pr_id}/reviews"
+        response = self._session.post(
+            url,
+            json={"body": body, "event": event},
             timeout=self._timeout,
-        ).raise_for_status()
+        )
+        if response.status_code == 422 and "own pull request" in response.text.lower():
+            fallback = self._session.post(
+                url,
+                json={
+                    "body": f"{body}\n\n*GitHub does not allow authors to submit "
+                    f"a `{event}` verdict on their own pull request, so this was "
+                    "published as a non-blocking review comment.*",
+                    "event": "COMMENT",
+                },
+                timeout=self._timeout,
+            )
+            fallback.raise_for_status()
+            return
+        response.raise_for_status()
 
     def _get(self, path: str) -> dict | list:
         resp = self._session.get(self._base + path, timeout=self._timeout)
